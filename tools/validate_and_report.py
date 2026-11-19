@@ -343,8 +343,7 @@ def rating_for(score: int) -> str:
     return "critical"
 
 
-def validate_inventory(root: Path, issues: Issues) -> List[Row]:
-    rel = INVENTORY_EXAMPLE
+def validate_inventory(root: Path, issues: Issues, rel: str = INVENTORY_EXAMPLE) -> List[Row]:
     rows = read_table(root, rel, INVENTORY_REQUIRED, issues)
     check_unique(rows, "system_id", rel, issues)
     for row in rows:
@@ -394,8 +393,8 @@ def _check_scores(row: Row, prefix: str, rel: str, issues: Issues) -> None:
         issues.error(rel, f"{loc}: {rating_col} should be '{rating_for(lik * imp)}' for a score of {lik * imp}")
 
 
-def validate_risk_register(root: Path, system_ids: set, control_ids: set, issues: Issues) -> List[Row]:
-    rel = RISK_EXAMPLE
+def validate_risk_register(root: Path, system_ids: set, control_ids: set, issues: Issues,
+                           rel: str = RISK_EXAMPLE) -> List[Row]:
     rows = read_table(root, rel, RISK_REQUIRED, issues)
     check_unique(rows, "risk_id", rel, issues)
     for row in rows:
@@ -425,8 +424,8 @@ def validate_risk_register(root: Path, system_ids: set, control_ids: set, issues
     return rows
 
 
-def validate_incident_log(root: Path, system_ids: set, control_ids: set, issues: Issues) -> List[Row]:
-    rel = INCIDENT_EXAMPLE
+def validate_incident_log(root: Path, system_ids: set, control_ids: set, issues: Issues,
+                          rel: str = INCIDENT_EXAMPLE) -> List[Row]:
     rows = read_table(root, rel, INCIDENT_REQUIRED, issues)
     check_unique(rows, "incident_id", rel, issues)
     for row in rows:
@@ -454,6 +453,22 @@ def validate_incident_log(root: Path, system_ids: set, control_ids: set, issues:
             if ref not in control_ids:
                 issues.error(rel, f"{loc}: related_controls references unknown control '{ref}'")
     return rows
+
+
+def example_dirs(root: Path) -> List[str]:
+    """Return every worked example folder, as paths relative to the root.
+
+    The Fernhill folder is always first, so a missing Fernhill file is still reported. Any other
+    folder under examples/ that holds an inventory file is checked with the same rules.
+    """
+    found = [EXAMPLE_DIR]
+    base = root / "examples"
+    if base.is_dir():
+        for path in sorted(base.iterdir()):
+            rel = f"examples/{path.name}"
+            if rel != EXAMPLE_DIR and (path / "ai-system-inventory.csv").is_file():
+                found.append(rel)
+    return found
 
 
 LINK_RE = re.compile(r"\[[^\]]*\]\(([^)\s]+)\)")
@@ -684,10 +699,11 @@ def run(root: Path, write: bool = True, check: bool = False) -> RunResult:
     frameworks = validate_frameworks(root, issues)
     controls = validate_matrix(root, frameworks, issues)
     control_ids = {c["control_id"] for c in controls}
-    inventory = validate_inventory(root, issues)
-    system_ids = {r["system_id"] for r in inventory}
-    validate_risk_register(root, system_ids, control_ids, issues)
-    validate_incident_log(root, system_ids, control_ids, issues)
+    for example in example_dirs(root):
+        inventory = validate_inventory(root, issues, f"{example}/ai-system-inventory.csv")
+        system_ids = {r["system_id"] for r in inventory}
+        validate_risk_register(root, system_ids, control_ids, issues, f"{example}/ai-risk-register.csv")
+        validate_incident_log(root, system_ids, control_ids, issues, f"{example}/ai-incident-log.csv")
     validate_blank_templates(root, issues)
 
     generated: Dict[str, str] = {}

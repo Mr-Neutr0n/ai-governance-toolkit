@@ -6,6 +6,11 @@ All notable changes to this project are recorded here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- A second worked example, `examples/larkspur/`: a fictional energy supplier using AI in customer service, with an inventory, risk register, incident log, a completed impact assessment and a control mapping.
+- The validator now checks every folder under `examples/` with the same rules, and the register health report can be run on any of them.
+
 ## [1.0.0] - 2026-11-12
 
 ### Added

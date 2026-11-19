@@ -256,5 +256,17 @@ class CommandLineTests(unittest.TestCase):
         self.assertEqual(rh.cell("a|b"), "a\\|b")
 
 
+class SecondExampleTests(unittest.TestCase):
+    def test_larkspur_registers_load_and_give_the_documented_findings(self):
+        out, err = io.StringIO(), io.StringIO()
+        with redirect_stdout(out), redirect_stderr(err):
+            code = rh.main(["--registers", str(REPO_ROOT / "examples" / "larkspur"), "--as-of", "2026-11-19"])
+        self.assertEqual(code, 0, msg=err.getvalue())
+        text = out.getvalue()
+        self.assertIn("Registers read: 4 systems, 11 risks, 3 incidents.", text)
+        self.assertIn("LE-INC-003", text)
+        self.assertIn("RH08", text)
+
+
 if __name__ == "__main__":
     unittest.main()

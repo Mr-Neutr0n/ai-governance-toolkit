@@ -11,6 +11,7 @@ files are never modified.
 
 import csv
 import io
+import re
 import shutil
 import sys
 import tempfile
@@ -387,6 +388,55 @@ class HelperTests(unittest.TestCase):
         self.assertIsNotNone(vr.parse_date("2026-11-04"))
         self.assertIsNone(vr.parse_date("04/11/2026"))
         self.assertIsNone(vr.parse_date("2026-02-30"))
+
+
+class SecondExampleTests(TempRepoTestCase):
+    """The Larkspur example is checked with the same rules as Fernhill."""
+
+    larkspur_risks = "examples/larkspur/ai-risk-register.csv"
+
+    def test_every_example_folder_is_found(self):
+        self.assertEqual(vr.example_dirs(REPO_ROOT), ["examples/fernhill", "examples/larkspur"])
+
+    def test_larkspur_has_the_expected_shape(self):
+        for name, rows in (("ai-system-inventory.csv", 4), ("ai-risk-register.csv", 11), ("ai-incident-log.csv", 3)):
+            with (REPO_ROOT / "examples" / "larkspur" / name).open(newline="", encoding="utf-8") as handle:
+                self.assertEqual(len(list(csv.DictReader(handle))), rows, name)
+
+    def test_a_fault_in_larkspur_is_reported_against_its_own_file(self):
+        def change(h, rows):
+            rows[0][col(h, "system_id")] = "LE-AI-999"
+
+        edit_csv(self.root / self.larkspur_risks, change)
+        result = self.run_validator()
+        self.assert_error_contains(result, "examples/larkspur/ai-risk-register.csv")
+        self.assert_error_contains(result, "orphan risk")
+
+    def test_an_extra_example_folder_is_picked_up(self):
+        shutil.copytree(self.root / "examples" / "larkspur", self.root / "examples" / "third")
+        def change(h, rows):
+            rows[0][col(h, "inherent_score")] = "7"
+
+        edit_csv(self.root / "examples" / "third" / "ai-risk-register.csv", change)
+        self.assert_error_contains(self.run_validator(), "examples/third/ai-risk-register.csv")
+
+    def test_control_ids_in_example_documents_exist_in_the_matrix(self):
+        with (REPO_ROOT / "data" / "control_matrix.csv").open(newline="", encoding="utf-8") as handle:
+            known = {row["control_id"] for row in csv.DictReader(handle)}
+        mentioned = set()
+        for path in (REPO_ROOT / "examples" / "larkspur").glob("*.md"):
+            mentioned |= set(re.findall(r"TK-[A-Z]{3}-\d{2}", path.read_text(encoding="utf-8")))
+        self.assertTrue(mentioned, "the example documents should mention some controls")
+        self.assertEqual(sorted(mentioned - known), [])
+
+    def test_risk_ids_in_the_impact_assessment_exist_in_the_register(self):
+        with (REPO_ROOT / "examples" / "larkspur" / "ai-risk-register.csv").open(newline="", encoding="utf-8") as handle:
+            known = {row["risk_id"] for row in csv.DictReader(handle)}
+        text = (REPO_ROOT / "examples" / "larkspur" / "ai-impact-assessment.md").read_text(encoding="utf-8")
+        text += (REPO_ROOT / "examples" / "larkspur" / "control-mapping.md").read_text(encoding="utf-8")
+        mentioned = set(re.findall(r"LE-R-\d{3}", text))
+        self.assertTrue(mentioned)
+        self.assertEqual(sorted(mentioned - known), [])
 
 
 if __name__ == "__main__":
